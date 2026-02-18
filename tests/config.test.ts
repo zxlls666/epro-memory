@@ -116,16 +116,47 @@ describe("parseConfig", () => {
     ).toThrow("extractMaxChars must be a number between 100 and 100000");
   });
 
-  it("does not throw when recallMinScore is NaN (TypeBox strips it)", () => {
-    // TypeBox's Value.Cast coerces NaN to undefined for Optional(Number()),
-    // so assertRange sees undefined and skips validation.
+  it("throws when recallMinScore is NaN", () => {
     expect(() =>
       parseConfig({
         embedding: { apiKey: "k" },
         llm: { apiKey: "k" },
         recallMinScore: NaN,
       }),
-    ).not.toThrow();
+    ).toThrow("recallMinScore must be a number, got NaN");
+  });
+
+  // --- Pre-cast type validation (P2 fix) ---
+  it("throws when recallMinScore is a string", () => {
+    expect(() =>
+      parseConfig({
+        embedding: { apiKey: "k" },
+        llm: { apiKey: "k" },
+        recallMinScore: "foo" as unknown,
+      }),
+    ).toThrow("recallMinScore must be a number, got string");
+  });
+
+  it("throws when recallLimit is a boolean", () => {
+    expect(() =>
+      parseConfig({
+        embedding: { apiKey: "k" },
+        llm: { apiKey: "k" },
+        recallLimit: true as unknown,
+      }),
+    ).toThrow("recallLimit must be a number, got boolean");
+  });
+
+  it("coerces null to 0 via Value.Cast (fails range check)", () => {
+    // null passes pre-cast check, but Value.Cast coerces it to 0,
+    // which is below extractMaxChars minimum of 100
+    expect(() =>
+      parseConfig({
+        embedding: { apiKey: "k" },
+        llm: { apiKey: "k" },
+        extractMaxChars: null as unknown,
+      }),
+    ).toThrow("extractMaxChars must be a number between 100 and 100000");
   });
 
   it("throws when recallLimit is Infinity", () => {

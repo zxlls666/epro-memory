@@ -194,9 +194,15 @@ export class MemoryDB {
       if (existing.length === 0) return;
 
       const row = existing[0];
-      const updated = { ...row, ...fields, updated_at: Date.now() };
-      await this.table!.delete(`id = '${id}'`);
+      const updated = {
+        ...row,
+        ...fields,
+        id: randomUUID(),
+        updated_at: Date.now(),
+      };
+      // Add new row first — if this fails, the original is untouched.
       await this.table!.add([updated]);
+      await this.table!.delete(`id = '${id}'`);
     });
   }
 
@@ -214,11 +220,13 @@ export class MemoryDB {
       const row = existing[0];
       const updated = {
         ...row,
+        id: randomUUID(),
         active_count: ((row.active_count as number) || 0) + 1,
         updated_at: Date.now(),
       };
-      await this.table!.delete(`id = '${id}'`);
+      // Add new row first — if this fails, the original is untouched.
       await this.table!.add([updated]);
+      await this.table!.delete(`id = '${id}'`);
     });
   }
 }

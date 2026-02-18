@@ -71,7 +71,28 @@ function assertRange(
   }
 }
 
+const NUMERIC_FIELDS = [
+  "recallLimit",
+  "recallMinScore",
+  "extractMinMessages",
+  "extractMaxChars",
+] as const;
+
 export function parseConfig(raw: unknown): EproConfig {
+  // Reject non-numeric types on numeric fields BEFORE Value.Cast coerces them
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    for (const field of NUMERIC_FIELDS) {
+      const v = obj[field];
+      if (v === undefined || v === null) continue;
+      if (typeof v !== "number" || Number.isNaN(v)) {
+        throw new Error(
+          `epro-memory: ${field} must be a number, got ${Number.isNaN(v) ? "NaN" : typeof v}`,
+        );
+      }
+    }
+  }
+
   const config = Value.Cast(EproConfigSchema, raw);
   if (!config.embedding?.apiKey) {
     throw new Error("epro-memory: embedding.apiKey is required");

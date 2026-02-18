@@ -51,13 +51,18 @@ export function parseJsonFromResponse<T>(text: string): T | null {
     }
   }
 
-  // Try balanced brace extraction — find first { and its matching }
-  // Tracks string context to avoid counting braces inside JSON string literals
-  const braceStart = text.indexOf("{");
-  if (braceStart !== -1) {
+  // Try balanced brace extraction — scan for { and its matching }
+  // Tracks string context to avoid counting braces inside JSON string literals.
+  // On parse failure, continues scanning from the next { (does not give up).
+  let searchFrom = 0;
+  while (searchFrom < text.length) {
+    const braceStart = text.indexOf("{", searchFrom);
+    if (braceStart === -1) break;
+
     let depth = 0;
     let inString = false;
     let escaped = false;
+    let foundEnd = -1;
     for (let i = braceStart; i < text.length; i++) {
       const ch = text[i];
       if (escaped) {
@@ -76,14 +81,22 @@ export function parseJsonFromResponse<T>(text: string): T | null {
         if (ch === "{") depth++;
         else if (ch === "}") depth--;
         if (depth === 0) {
-          try {
-            return JSON.parse(text.slice(braceStart, i + 1)) as T;
-          } catch {
-            break;
-          }
+          foundEnd = i;
+          break;
         }
       }
     }
+
+    if (foundEnd !== -1) {
+      try {
+        return JSON.parse(text.slice(braceStart, foundEnd + 1)) as T;
+      } catch {
+        // This balanced block wasn't valid JSON — try the next {
+        searchFrom = braceStart + 1;
+        continue;
+      }
+    }
+    break; // Unbalanced — no point scanning further
   }
 
   return null;

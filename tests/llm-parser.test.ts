@@ -105,4 +105,20 @@ describe("parseJsonFromResponse", () => {
     const input = 'Here: {"path": "C:\\\\"} done';
     expect(parseJsonFromResponse(input)).toEqual({ path: "C:\\" });
   });
+
+  // --- Skip invalid block and find later valid JSON (P3 fix) ---
+  it("skips invalid brace block and finds later valid JSON", () => {
+    const input = 'prefix {not json} then {"ok": 1}';
+    expect(parseJsonFromResponse(input)).toEqual({ ok: 1 });
+  });
+
+  it("skips multiple invalid blocks before finding valid JSON", () => {
+    const input = '{bad} {also bad} {still bad} {"found": true}';
+    expect(parseJsonFromResponse(input)).toEqual({ found: true });
+  });
+
+  it("returns null when all brace blocks are invalid", () => {
+    const input = "{nope} {also nope}";
+    expect(parseJsonFromResponse(input)).toBeNull();
+  });
 });
