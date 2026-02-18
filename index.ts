@@ -108,7 +108,7 @@ const eproMemoryPlugin = {
           for (const r of results) {
             const cat = r.entry.category;
             if (!grouped.has(cat)) grouped.set(cat, []);
-            grouped.get(cat)!.push(`- ${r.entry.abstract}`);
+            grouped.get(cat)!.push(`- ${sanitizeForContext(r.entry.abstract)}`);
           }
 
           const lines: string[] = [];
@@ -217,6 +217,15 @@ function extractConversationText(
     truncated = truncated.slice(0, -1);
   }
   return truncated + "\u2026";
+}
+
+/**
+ * Neutralize XML-like tags in stored text to prevent prompt boundary injection.
+ * Only matches `<` followed by an optional `/` and a letter (i.e. actual tag syntax).
+ * `</agent-experience>` becomes `< /agent-experience>`, but `5 < 10` is unchanged.
+ */
+export function sanitizeForContext(text: string): string {
+  return text.replace(/<(\/?)([a-zA-Z])/g, "< $1$2");
 }
 
 export { extractConversationText };

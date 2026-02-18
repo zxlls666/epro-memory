@@ -55,12 +55,28 @@ export class MemoryDB {
   private db: lancedb.Connection | null = null;
   private table: lancedb.Table | null = null;
   private initPromise: Promise<void> | null = null;
+  private writeLock: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly dbPath: string,
     private readonly vectorDim: number,
     private readonly logger: PluginLogger,
   ) {}
+
+  /** Serialize all write operations to prevent concurrent read-modify-write races. */
+  private async withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+    const prev = this.writeLock;
+    let resolve!: () => void;
+    this.writeLock = new Promise<void>((r) => {
+      resolve = r;
+    });
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      resolve();
+    }
+  }
 
   private async ensureInit(): Promise<void> {
     if (this.table) return;
@@ -169,46 +185,40 @@ export class MemoryDB {
   async update(id: string, fields: Partial<AgentMemoryRow>): Promise<void> {
     await this.ensureInit();
     assertUuid(id);
-    const existing = await this.table!.query()
-      .where(`id = '${id}'`)
-      .limit(1)
-      .toArray();
+    await this.withWriteLock(async () => {
+      const existing = await this.table!.query()
+        .where(`id = '${id}'`)
+        .limit(1)
+        .toArray();
 
-    if (existing.length === 0) return;
+      if (existing.length === 0) return;
 
-    const row = existing[0];
-    const updated = {
-      ...row,
-      ...fields,
-      updated_at: Date.now(),
-    };
-
-    // Add-then-delete reduces crash window vs delete-then-add
-    await this.table!.add([updated]);
-    await this.table!.delete(
-      `id = '${id}' AND updated_at != ${updated.updated_at as number}`,
-    );
+      const row = existing[0];
+      const updated = { ...row, ...fields, updated_at: Date.now() };
+      await this.table!.delete(`id = '${id}'`);
+      await this.table!.add([updated]);
+    });
   }
 
   async incrementActiveCount(id: string): Promise<void> {
     await this.ensureInit();
     assertUuid(id);
-    const existing = await this.table!.query()
-      .where(`id = '${id}'`)
-      .limit(1)
-      .toArray();
+    await this.withWriteLock(async () => {
+      const existing = await this.table!.query()
+        .where(`id = '${id}'`)
+        .limit(1)
+        .toArray();
 
-    if (existing.length === 0) return;
+      if (existing.length === 0) return;
 
-    const row = existing[0];
-    const updated = {
-      ...row,
-      active_count: ((row.active_count as number) || 0) + 1,
-      updated_at: Date.now(),
-    };
-    await this.table!.add([updated]);
-    await this.table!.delete(
-      `id = '${id}' AND updated_at != ${updated.updated_at as number}`,
-    );
+      const row = existing[0];
+      const updated = {
+        ...row,
+        active_count: ((row.active_count as number) || 0) + 1,
+        updated_at: Date.now(),
+      };
+      await this.table!.delete(`id = '${id}'`);
+      await this.table!.add([updated]);
+    });
   }
 }

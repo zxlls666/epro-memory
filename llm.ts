@@ -52,17 +52,35 @@ export function parseJsonFromResponse<T>(text: string): T | null {
   }
 
   // Try balanced brace extraction — find first { and its matching }
+  // Tracks string context to avoid counting braces inside JSON string literals
   const braceStart = text.indexOf("{");
   if (braceStart !== -1) {
     let depth = 0;
+    let inString = false;
+    let escaped = false;
     for (let i = braceStart; i < text.length; i++) {
-      if (text[i] === "{") depth++;
-      else if (text[i] === "}") depth--;
-      if (depth === 0) {
-        try {
-          return JSON.parse(text.slice(braceStart, i + 1)) as T;
-        } catch {
-          break;
+      const ch = text[i];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\" && inString) {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (!inString) {
+        if (ch === "{") depth++;
+        else if (ch === "}") depth--;
+        if (depth === 0) {
+          try {
+            return JSON.parse(text.slice(braceStart, i + 1)) as T;
+          } catch {
+            break;
+          }
         }
       }
     }

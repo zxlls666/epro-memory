@@ -13,20 +13,19 @@ describe("parseJsonFromResponse", () => {
 
   // --- Markdown fence ---
   it("parses JSON in ```json fence", () => {
-    expect(
-      parseJsonFromResponse('```json\n{"x": "hello"}\n```'),
-    ).toEqual({ x: "hello" });
+    expect(parseJsonFromResponse('```json\n{"x": "hello"}\n```')).toEqual({
+      x: "hello",
+    });
   });
 
   it("parses JSON in bare ``` fence", () => {
-    expect(
-      parseJsonFromResponse('```\n{"x": 1}\n```'),
-    ).toEqual({ x: 1 });
+    expect(parseJsonFromResponse('```\n{"x": 1}\n```')).toEqual({ x: 1 });
   });
 
   // --- Balanced brace extraction ---
   it("extracts JSON from mixed text", () => {
-    const input = 'Here is my answer:\n{"decision": "create", "reason": "new"}\nDone.';
+    const input =
+      'Here is my answer:\n{"decision": "create", "reason": "new"}\nDone.';
     expect(parseJsonFromResponse(input)).toEqual({
       decision: "create",
       reason: "new",
@@ -75,5 +74,35 @@ describe("parseJsonFromResponse", () => {
     // Input is valid JSON on its own
     const input = '{"a": 1}';
     expect(parseJsonFromResponse(input)).toEqual({ a: 1 });
+  });
+
+  // --- String-context-aware brace parsing (P3 fix) ---
+  it("handles braces inside JSON string values during extraction", () => {
+    const input = 'Result: {"msg": "use { and } carefully", "ok": true} done';
+    expect(parseJsonFromResponse(input)).toEqual({
+      msg: "use { and } carefully",
+      ok: true,
+    });
+  });
+
+  it("handles escaped quotes inside JSON strings", () => {
+    const input = 'Answer: {"text": "he said \\"hello\\"", "n": 1} end';
+    expect(parseJsonFromResponse(input)).toEqual({
+      text: 'he said "hello"',
+      n: 1,
+    });
+  });
+
+  it("handles nested objects with string braces", () => {
+    const input = 'Output: {"outer": {"code": "if (x) { y(); }", "v": 2}} rest';
+    expect(parseJsonFromResponse(input)).toEqual({
+      outer: { code: "if (x) { y(); }", v: 2 },
+    });
+  });
+
+  it("handles backslash-escaped backslash before quote", () => {
+    // JSON: {"path": "C:\\\\"}  — the value is C:\\
+    const input = 'Here: {"path": "C:\\\\"} done';
+    expect(parseJsonFromResponse(input)).toEqual({ path: "C:\\" });
   });
 });

@@ -44,6 +44,114 @@ describe("parseConfig", () => {
     expect(cfg.recallLimit).toBe(10);
     expect(cfg.autoRecall).toBe(false);
   });
+
+  // --- Range validation (P2 fix) ---
+  it("throws when recallLimit is out of range", () => {
+    expect(() =>
+      parseConfig({
+        embedding: { apiKey: "k" },
+        llm: { apiKey: "k" },
+        recallLimit: 0,
+      }),
+    ).toThrow("recallLimit must be a number between 1 and 100");
+  });
+
+  it("throws when recallLimit exceeds maximum", () => {
+    expect(() =>
+      parseConfig({
+        embedding: { apiKey: "k" },
+        llm: { apiKey: "k" },
+        recallLimit: 200,
+      }),
+    ).toThrow("recallLimit must be a number between 1 and 100");
+  });
+
+  it("throws when recallMinScore is out of range", () => {
+    expect(() =>
+      parseConfig({
+        embedding: { apiKey: "k" },
+        llm: { apiKey: "k" },
+        recallMinScore: -0.1,
+      }),
+    ).toThrow("recallMinScore must be a number between 0 and 1");
+  });
+
+  it("throws when recallMinScore exceeds 1", () => {
+    expect(() =>
+      parseConfig({
+        embedding: { apiKey: "k" },
+        llm: { apiKey: "k" },
+        recallMinScore: 1.5,
+      }),
+    ).toThrow("recallMinScore must be a number between 0 and 1");
+  });
+
+  it("throws when extractMinMessages is out of range", () => {
+    expect(() =>
+      parseConfig({
+        embedding: { apiKey: "k" },
+        llm: { apiKey: "k" },
+        extractMinMessages: 0,
+      }),
+    ).toThrow("extractMinMessages must be a number between 1 and 100");
+  });
+
+  it("throws when extractMaxChars is below minimum", () => {
+    expect(() =>
+      parseConfig({
+        embedding: { apiKey: "k" },
+        llm: { apiKey: "k" },
+        extractMaxChars: 50,
+      }),
+    ).toThrow("extractMaxChars must be a number between 100 and 100000");
+  });
+
+  it("throws when extractMaxChars exceeds maximum", () => {
+    expect(() =>
+      parseConfig({
+        embedding: { apiKey: "k" },
+        llm: { apiKey: "k" },
+        extractMaxChars: 200000,
+      }),
+    ).toThrow("extractMaxChars must be a number between 100 and 100000");
+  });
+
+  it("does not throw when recallMinScore is NaN (TypeBox strips it)", () => {
+    // TypeBox's Value.Cast coerces NaN to undefined for Optional(Number()),
+    // so assertRange sees undefined and skips validation.
+    expect(() =>
+      parseConfig({
+        embedding: { apiKey: "k" },
+        llm: { apiKey: "k" },
+        recallMinScore: NaN,
+      }),
+    ).not.toThrow();
+  });
+
+  it("throws when recallLimit is Infinity", () => {
+    expect(() =>
+      parseConfig({
+        embedding: { apiKey: "k" },
+        llm: { apiKey: "k" },
+        recallLimit: Infinity,
+      }),
+    ).toThrow("recallLimit must be a number between 1 and 100");
+  });
+
+  it("accepts valid range boundary values", () => {
+    const cfg = parseConfig({
+      embedding: { apiKey: "k" },
+      llm: { apiKey: "k" },
+      recallLimit: 1,
+      recallMinScore: 0,
+      extractMinMessages: 100,
+      extractMaxChars: 100000,
+    });
+    expect(cfg.recallLimit).toBe(1);
+    expect(cfg.recallMinScore).toBe(0);
+    expect(cfg.extractMinMessages).toBe(100);
+    expect(cfg.extractMaxChars).toBe(100000);
+  });
 });
 
 describe("vectorDimsForModel", () => {

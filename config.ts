@@ -52,6 +52,25 @@ export function vectorDimsForModel(model: string): number {
   return EMBEDDING_DIMENSIONS[model] ?? 1536;
 }
 
+function assertRange(
+  name: string,
+  value: unknown,
+  min: number,
+  max: number,
+): void {
+  if (value === undefined || value === null) return;
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < min ||
+    value > max
+  ) {
+    throw new Error(
+      `epro-memory: ${name} must be a number between ${min} and ${max}, got: ${value}`,
+    );
+  }
+}
+
 export function parseConfig(raw: unknown): EproConfig {
   const config = Value.Cast(EproConfigSchema, raw);
   if (!config.embedding?.apiKey) {
@@ -60,5 +79,9 @@ export function parseConfig(raw: unknown): EproConfig {
   if (!config.llm?.apiKey) {
     throw new Error("epro-memory: llm.apiKey is required");
   }
+  assertRange("recallLimit", config.recallLimit, 1, 100);
+  assertRange("recallMinScore", config.recallMinScore, 0, 1);
+  assertRange("extractMinMessages", config.extractMinMessages, 1, 100);
+  assertRange("extractMaxChars", config.extractMaxChars, 100, 100_000);
   return config as EproConfig;
 }
