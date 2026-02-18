@@ -5,7 +5,6 @@
  */
 
 import type { MemoryDB, MemorySearchResult } from "./db.js";
-import type { Embeddings } from "./embeddings.js";
 import type { LlmClient } from "./llm.js";
 import { buildDedupPrompt } from "./prompts.js";
 import type {
@@ -22,7 +21,6 @@ const VALID_DECISIONS = new Set(["create", "merge", "skip"]);
 export class MemoryDeduplicator {
   constructor(
     private db: MemoryDB,
-    private embeddings: Embeddings,
     private llm: LlmClient,
     private logger: PluginLogger,
   ) {}

@@ -17,7 +17,7 @@ const LlmConfig = Type.Object({
   baseUrl: Type.Optional(Type.String()),
 });
 
-export const EproConfigSchema = Type.Object({
+const EproConfigSchema = Type.Object({
   embedding: EmbeddingConfig,
   llm: LlmConfig,
   dbPath: Type.Optional(Type.String()),
@@ -29,7 +29,7 @@ export const EproConfigSchema = Type.Object({
   extractMaxChars: Type.Optional(Type.Number()),
 });
 
-export type EproConfig = Static<typeof EproConfigSchema>;
+type EproConfig = Static<typeof EproConfigSchema>;
 
 export const DEFAULTS = {
   embeddingModel: "text-embedding-3-small",

@@ -21,8 +21,16 @@ type MoltbotPluginApi = {
   pluginConfig?: Record<string, unknown>;
   logger: PluginLogger;
   resolvePath: (input: string) => string;
-  on: (hookName: string, handler: (...args: any[]) => any, opts?: { priority?: number }) => void;
-  registerService: (service: { id: string; start: () => void; stop?: () => void }) => void;
+  on: (
+    hookName: string,
+    handler: (...args: any[]) => any,
+    opts?: { priority?: number },
+  ) => void;
+  registerService: (service: {
+    id: string;
+    start: () => void;
+    stop?: () => void;
+  }) => void;
 };
 
 const eproMemoryPlugin = {
@@ -43,7 +51,8 @@ const eproMemoryPlugin = {
     const autoRecall = cfg.autoRecall ?? DEFAULTS.autoRecall;
     const recallLimit = cfg.recallLimit ?? DEFAULTS.recallLimit;
     const recallMinScore = cfg.recallMinScore ?? DEFAULTS.recallMinScore;
-    const extractMinMessages = cfg.extractMinMessages ?? DEFAULTS.extractMinMessages;
+    const extractMinMessages =
+      cfg.extractMinMessages ?? DEFAULTS.extractMinMessages;
     const extractMaxChars = cfg.extractMaxChars ?? DEFAULTS.extractMaxChars;
 
     // Initialize services
@@ -55,8 +64,14 @@ const eproMemoryPlugin = {
       cfg.embedding.baseUrl,
     );
     const llm = new LlmClient(cfg.llm.apiKey, llmModel, cfg.llm.baseUrl);
-    const deduplicator = new MemoryDeduplicator(db, embeddings, llm, logger);
-    const extractor = new MemoryExtractor(db, embeddings, llm, deduplicator, logger);
+    const deduplicator = new MemoryDeduplicator(db, llm, logger);
+    const extractor = new MemoryExtractor(
+      db,
+      embeddings,
+      llm,
+      deduplicator,
+      logger,
+    );
 
     // Register service lifecycle
     api.registerService({
@@ -99,7 +114,9 @@ const eproMemoryPlugin = {
           }
 
           const memoryContext = lines.join("\n");
-          logger.info(`epro-memory: injecting ${results.length} agent memories`);
+          logger.info(
+            `epro-memory: injecting ${results.length} agent memories`,
+          );
 
           return {
             prependContext: `<agent-experience>\nThe following agent experiences may be relevant:\n${memoryContext}\n</agent-experience>`,
@@ -119,7 +136,8 @@ const eproMemoryPlugin = {
           ctx?: { sessionKey?: string; agentId?: string },
         ) => {
           if (!event.success) return;
-          if (!event.messages || event.messages.length < extractMinMessages) return;
+          if (!event.messages || event.messages.length < extractMinMessages)
+            return;
 
           try {
             const conversationText = extractConversationText(
@@ -131,7 +149,11 @@ const eproMemoryPlugin = {
             const sessionKey = ctx?.sessionKey ?? "unknown";
             const user = ctx?.agentId ?? "agent";
 
-            await extractor.extractAndPersist(conversationText, sessionKey, user);
+            await extractor.extractAndPersist(
+              conversationText,
+              sessionKey,
+              user,
+            );
           } catch (err) {
             logger.warn(`epro-memory: extraction failed: ${String(err)}`);
           }
