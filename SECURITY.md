@@ -11,7 +11,7 @@
 If you discover a security vulnerability, please report it responsibly:
 
 1. **Do not** open a public GitHub issue for security vulnerabilities
-2. Email your findings to **security@toby-bridges.dev** (or open a [private security advisory](../../security/advisories/new) on GitHub)
+2. Email your findings to **toby-bridges@users.noreply.github.com** (or open a [private security advisory](../../security/advisories/new) on GitHub)
 3. Include a description of the vulnerability, steps to reproduce, and potential impact
 4. You will receive an acknowledgment within 48 hours
 
