@@ -51,13 +51,20 @@ function parseJsonFromResponse<T>(text: string): T | null {
     }
   }
 
-  // Try finding first { ... } or [ ... ]
-  const braceMatch = text.match(/(\{[\s\S]*\})/);
-  if (braceMatch) {
-    try {
-      return JSON.parse(braceMatch[1]) as T;
-    } catch {
-      // noop
+  // Try balanced brace extraction — find first { and its matching }
+  const braceStart = text.indexOf("{");
+  if (braceStart !== -1) {
+    let depth = 0;
+    for (let i = braceStart; i < text.length; i++) {
+      if (text[i] === "{") depth++;
+      else if (text[i] === "}") depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(text.slice(braceStart, i + 1)) as T;
+        } catch {
+          break;
+        }
+      }
     }
   }
 

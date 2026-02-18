@@ -96,7 +96,11 @@ const eproMemoryPlugin = {
 
           // Increment active_count for recalled memories
           for (const r of results) {
-            db.incrementActiveCount(r.entry.id).catch(() => {});
+            db.incrementActiveCount(r.entry.id).catch((err) => {
+              logger.warn(
+                `epro-memory: incrementActiveCount failed: ${String(err)}`,
+              );
+            });
           }
 
           // Format as L0 abstracts grouped by category
@@ -206,7 +210,13 @@ function extractConversationText(
 
   const text = parts.join("\n\n");
   if (text.length <= maxChars) return text;
-  return text.slice(0, maxChars) + "\u2026";
+  let truncated = text.slice(0, maxChars);
+  // Avoid splitting UTF-16 surrogate pairs
+  const lastChar = truncated.charCodeAt(truncated.length - 1);
+  if (lastChar >= 0xd800 && lastChar <= 0xdbff) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated + "\u2026";
 }
 
 export default eproMemoryPlugin;
