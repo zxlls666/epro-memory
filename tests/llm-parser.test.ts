@@ -121,4 +121,14 @@ describe("parseJsonFromResponse", () => {
     const input = "{nope} {also nope}";
     expect(parseJsonFromResponse(input)).toBeNull();
   });
+
+  it("skips unbalanced first { and finds later valid JSON", () => {
+    const input = 'prefix {incomplete then {"ok": 1}';
+    expect(parseJsonFromResponse(input)).toEqual({ ok: 1 });
+  });
+
+  it("skips unbalanced block among multiple candidates", () => {
+    const input = '{open { never closed {"a": 2}';
+    expect(parseJsonFromResponse(input)).toEqual({ a: 2 });
+  });
 });

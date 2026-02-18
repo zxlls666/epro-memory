@@ -147,16 +147,14 @@ describe("parseConfig", () => {
     ).toThrow("recallLimit must be a number, got boolean");
   });
 
-  it("coerces null to 0 via Value.Cast (fails range check)", () => {
-    // null passes pre-cast check, but Value.Cast coerces it to 0,
-    // which is below extractMaxChars minimum of 100
+  it("throws when extractMaxChars is null", () => {
     expect(() =>
       parseConfig({
         embedding: { apiKey: "k" },
         llm: { apiKey: "k" },
         extractMaxChars: null as unknown,
       }),
-    ).toThrow("extractMaxChars must be a number between 100 and 100000");
+    ).toThrow("extractMaxChars must be a number, got null");
   });
 
   it("throws when recallLimit is Infinity", () => {

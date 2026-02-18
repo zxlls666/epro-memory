@@ -38,7 +38,7 @@ function rowToEntry(row: Record<string, unknown>): AgentMemoryRow {
     abstract: row.abstract as string,
     overview: row.overview as string,
     content: row.content as string,
-    vector: row.vector as number[],
+    vector: Array.from(row.vector as Iterable<number>),
     source_session: row.source_session as string,
     active_count: row.active_count as number,
     created_at: row.created_at as number,
@@ -193,16 +193,17 @@ export class MemoryDB {
 
       if (existing.length === 0) return;
 
-      const row = existing[0];
-      const updated = {
-        ...row,
-        ...fields,
-        id: randomUUID(),
-        updated_at: Date.now(),
-      };
-      // Add new row first — if this fails, the original is untouched.
-      await this.table!.add([updated]);
+      // Strip Arrow/Lance internal fields via rowToEntry before writing back
+      const clean = rowToEntry(existing[0] as Record<string, unknown>);
+      const updated = { ...clean, ...fields, updated_at: Date.now() };
+      // Delete then add with same ID; restore original on add failure
       await this.table!.delete(`id = '${id}'`);
+      try {
+        await this.table!.add([updated]);
+      } catch (err) {
+        await this.table!.add([clean]);
+        throw err;
+      }
     });
   }
 
@@ -217,16 +218,21 @@ export class MemoryDB {
 
       if (existing.length === 0) return;
 
-      const row = existing[0];
+      // Strip Arrow/Lance internal fields via rowToEntry before writing back
+      const clean = rowToEntry(existing[0] as Record<string, unknown>);
       const updated = {
-        ...row,
-        id: randomUUID(),
-        active_count: ((row.active_count as number) || 0) + 1,
+        ...clean,
+        active_count: (clean.active_count || 0) + 1,
         updated_at: Date.now(),
       };
-      // Add new row first — if this fails, the original is untouched.
-      await this.table!.add([updated]);
+      // Delete then add with same ID; restore original on add failure
       await this.table!.delete(`id = '${id}'`);
+      try {
+        await this.table!.add([updated]);
+      } catch (err) {
+        await this.table!.add([clean]);
+        throw err;
+      }
     });
   }
 }

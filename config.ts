@@ -84,7 +84,10 @@ export function parseConfig(raw: unknown): EproConfig {
     const obj = raw as Record<string, unknown>;
     for (const field of NUMERIC_FIELDS) {
       const v = obj[field];
-      if (v === undefined || v === null) continue;
+      if (v === undefined) continue;
+      if (v === null) {
+        throw new Error(`epro-memory: ${field} must be a number, got null`);
+      }
       if (typeof v !== "number" || Number.isNaN(v)) {
         throw new Error(
           `epro-memory: ${field} must be a number, got ${Number.isNaN(v) ? "NaN" : typeof v}`,

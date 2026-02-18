@@ -96,7 +96,8 @@ export function parseJsonFromResponse<T>(text: string): T | null {
         continue;
       }
     }
-    break; // Unbalanced — no point scanning further
+    // Unbalanced block — skip past this { and try later ones
+    searchFrom = braceStart + 1;
   }
 
   return null;
