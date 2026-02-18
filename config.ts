@@ -53,5 +53,12 @@ export function vectorDimsForModel(model: string): number {
 }
 
 export function parseConfig(raw: unknown): EproConfig {
-  return Value.Cast(EproConfigSchema, raw) as EproConfig;
+  const config = Value.Cast(EproConfigSchema, raw);
+  if (!config.embedding?.apiKey) {
+    throw new Error("epro-memory: embedding.apiKey is required");
+  }
+  if (!config.llm?.apiKey) {
+    throw new Error("epro-memory: llm.apiKey is required");
+  }
+  return config as EproConfig;
 }

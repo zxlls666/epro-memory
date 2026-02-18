@@ -210,29 +210,50 @@ Please decide:
 Return JSON format:
 {
   "decision": "skip|create|merge",
+  "match_index": 1,
   "reason": "Decision reason"
-}`;
+}
+
+If decision is "merge", set "match_index" to the number of the existing memory to merge with (1-based).`;
 }
 
 export function buildMergePrompt(
+  existingAbstract: string,
+  existingOverview: string,
   existingContent: string,
+  newAbstract: string,
+  newOverview: string,
   newContent: string,
   category: string,
 ): string {
-  return `Merge the following memory information into a single, coherent content.
+  return `Merge the following memory into a single coherent record with all three levels.
 
 **Category**: ${category}
 
-**Existing Content:**
+**Existing Memory:**
+Abstract: ${existingAbstract}
+Overview:
+${existingOverview}
+Content:
 ${existingContent}
 
 **New Information:**
+Abstract: ${newAbstract}
+Overview:
+${newOverview}
+Content:
 ${newContent}
 
 Requirements:
 - Remove duplicate information
 - Keep the most up-to-date details
 - Maintain a coherent narrative
-- Output ONLY the merged content, no explanation
-- Keep code identifiers / URIs / model names unchanged when they are proper nouns`;
+- Keep code identifiers / URIs / model names unchanged when they are proper nouns
+
+Return JSON:
+{
+  "abstract": "Merged one-line abstract",
+  "overview": "Merged structured Markdown overview",
+  "content": "Merged full content"
+}`;
 }

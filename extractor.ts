@@ -126,8 +126,11 @@ export class MemoryExtractor {
       });
       stats.created++;
     } else if (result.decision === "merge") {
-      if (MERGE_SUPPORTED_CATEGORIES.has(candidate.category) && result.matchId) {
-        await this.handleMerge(candidate, result.matchId, vector);
+      if (
+        MERGE_SUPPORTED_CATEGORIES.has(candidate.category) &&
+        result.matchId
+      ) {
+        await this.handleMerge(candidate, result.matchId);
         stats.merged++;
       } else {
         // events/cases don't support merge, treat as skip
@@ -143,11 +146,9 @@ export class MemoryExtractor {
     candidate: CandidateMemory,
     sessionKey: string,
   ): Promise<void> {
-    // Find existing profile
     const existing = await this.db.findByCategory("profile");
 
     if (existing.length === 0) {
-      // No existing profile — create
       const vector = await this.embeddings.embed(
         `${candidate.abstract} ${candidate.content}`,
       );
@@ -162,22 +163,16 @@ export class MemoryExtractor {
       return;
     }
 
-    // Merge with existing profile
     const target = existing[0];
-    const mergedContent = await this.mergeContent(
-      target.content,
-      candidate.content,
-      "profile",
-    );
-
+    const merged = await this.mergeMemory(target, candidate);
     const mergedVector = await this.embeddings.embed(
-      `${candidate.abstract} ${mergedContent}`,
+      `${merged.abstract} ${merged.content}`,
     );
 
     await this.db.update(target.id, {
-      abstract: candidate.abstract,
-      overview: candidate.overview,
-      content: mergedContent,
+      abstract: merged.abstract,
+      overview: merged.overview,
+      content: merged.content,
       vector: mergedVector,
     });
   }
@@ -185,38 +180,53 @@ export class MemoryExtractor {
   private async handleMerge(
     candidate: CandidateMemory,
     matchId: string,
-    _candidateVector: number[],
   ): Promise<void> {
-    // Read existing memory
-    const existing = await this.db.findByCategory(candidate.category);
-    const target = existing.find((m) => m.id === matchId);
+    const target = await this.db.getById(matchId);
     if (!target) return;
 
-    const mergedContent = await this.mergeContent(
-      target.content,
-      candidate.content,
-      candidate.category,
-    );
-
+    const merged = await this.mergeMemory(target, candidate);
     const mergedVector = await this.embeddings.embed(
-      `${candidate.abstract} ${mergedContent}`,
+      `${merged.abstract} ${merged.content}`,
     );
 
     await this.db.update(matchId, {
-      abstract: candidate.abstract,
-      overview: candidate.overview,
-      content: mergedContent,
+      abstract: merged.abstract,
+      overview: merged.overview,
+      content: merged.content,
       vector: mergedVector,
     });
   }
 
-  private async mergeContent(
-    existingContent: string,
-    newContent: string,
-    category: string,
-  ): Promise<string> {
-    const prompt = buildMergePrompt(existingContent, newContent, category);
-    const merged = await this.llm.complete(prompt);
-    return merged || newContent;
+  private async mergeMemory(
+    existing: { abstract: string; overview: string; content: string },
+    candidate: CandidateMemory,
+  ): Promise<{ abstract: string; overview: string; content: string }> {
+    const prompt = buildMergePrompt(
+      existing.abstract,
+      existing.overview,
+      existing.content,
+      candidate.abstract,
+      candidate.overview,
+      candidate.content,
+      candidate.category,
+    );
+    const data = await this.llm.completeJson<{
+      abstract: string;
+      overview: string;
+      content: string;
+    }>(prompt);
+    if (data?.abstract && data?.content) {
+      return {
+        abstract: data.abstract,
+        overview: data.overview || candidate.overview,
+        content: data.content,
+      };
+    }
+    // Fallback: keep candidate's L0/L1 with candidate's L2
+    return {
+      abstract: candidate.abstract,
+      overview: candidate.overview,
+      content: candidate.content,
+    };
   }
 }

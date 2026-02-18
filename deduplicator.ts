@@ -17,6 +17,7 @@ import type {
 
 const SIMILARITY_THRESHOLD = 0.7;
 const MAX_SIMILAR_FOR_PROMPT = 3;
+const VALID_DECISIONS = new Set(["create", "merge", "skip"]);
 
 export class MemoryDeduplicator {
   constructor(
@@ -53,11 +54,11 @@ export class MemoryDeduplicator {
     candidate: CandidateMemory,
     similar: MemorySearchResult[],
   ): Promise<DedupResult> {
-    const existingFormatted = similar
-      .slice(0, MAX_SIMILAR_FOR_PROMPT)
+    const topSimilar = similar.slice(0, MAX_SIMILAR_FOR_PROMPT);
+    const existingFormatted = topSimilar
       .map(
         (r, i) =>
-          `${i + 1}. [${r.entry.category}] ${r.entry.abstract}\n   Score: ${r.score.toFixed(3)}`,
+          `${i + 1}. [${r.entry.category}] ${r.entry.abstract}\n   Overview: ${r.entry.overview}\n   Score: ${r.score.toFixed(3)}`,
       )
       .join("\n");
 
@@ -72,23 +73,36 @@ export class MemoryDeduplicator {
       const data = await this.llm.completeJson<{
         decision: string;
         reason: string;
+        match_index?: number;
       }>(prompt);
 
       if (!data) {
-        this.logger.warn("epro-memory: dedup LLM returned unparseable response, defaulting to CREATE");
+        this.logger.warn(
+          "epro-memory: dedup LLM returned unparseable response, defaulting to CREATE",
+        );
         return { decision: "create", reason: "LLM response unparseable" };
       }
 
-      const decision = (data.decision?.toLowerCase() ?? "create") as DedupDecision;
-      const validDecisions = new Set(["create", "merge", "skip"]);
-      if (!validDecisions.has(decision)) {
-        return { decision: "create", reason: `Unknown decision: ${data.decision}` };
+      const decision = (data.decision?.toLowerCase() ??
+        "create") as DedupDecision;
+      if (!VALID_DECISIONS.has(decision)) {
+        return {
+          decision: "create",
+          reason: `Unknown decision: ${data.decision}`,
+        };
       }
+
+      // Resolve merge target from LLM's match_index (1-based), fall back to top result
+      const idx = data.match_index;
+      const matchEntry =
+        typeof idx === "number" && idx >= 1 && idx <= topSimilar.length
+          ? topSimilar[idx - 1]
+          : topSimilar[0];
 
       return {
         decision,
         reason: data.reason ?? "",
-        matchId: similar[0]?.entry.id,
+        matchId: decision === "merge" ? matchEntry?.entry.id : undefined,
       };
     } catch (err) {
       this.logger.warn(`epro-memory: dedup LLM failed: ${String(err)}`);

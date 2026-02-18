@@ -22,6 +22,11 @@ export class Embeddings {
       model: this.model,
       input: text,
     });
+    if (!response.data[0]) {
+      throw new Error(
+        `Embedding API returned empty data for model ${this.model}`,
+      );
+    }
     return response.data[0].embedding;
   }
 }

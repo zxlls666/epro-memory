@@ -5,9 +5,46 @@
 
 import * as lancedb from "@lancedb/lancedb";
 import { randomUUID } from "node:crypto";
-import type { AgentMemoryRow, MemoryCategory, PluginLogger } from "./types.js";
+import {
+  MEMORY_CATEGORIES,
+  type AgentMemoryRow,
+  type MemoryCategory,
+  type PluginLogger,
+} from "./types.js";
 
 const TABLE_NAME = "agent_memories";
+
+// --- Input sanitization (CRITICAL: prevents LanceDB filter injection) ---
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const VALID_CATEGORIES = new Set<string>(MEMORY_CATEGORIES);
+
+function assertCategory(value: string): void {
+  if (!VALID_CATEGORIES.has(value)) {
+    throw new Error(`Invalid memory category: ${value}`);
+  }
+}
+
+function assertUuid(value: string): void {
+  if (!UUID_RE.test(value)) {
+    throw new Error(`Invalid UUID: ${value}`);
+  }
+}
+
+function rowToEntry(row: Record<string, unknown>): AgentMemoryRow {
+  return {
+    id: row.id as string,
+    category: row.category as MemoryCategory,
+    abstract: row.abstract as string,
+    overview: row.overview as string,
+    content: row.content as string,
+    vector: row.vector as number[],
+    source_session: row.source_session as string,
+    active_count: row.active_count as number,
+    created_at: row.created_at as number,
+    updated_at: row.updated_at as number,
+  };
+}
 
 export type MemorySearchResult = {
   entry: AgentMemoryRow;
@@ -28,7 +65,10 @@ export class MemoryDB {
   private async ensureInit(): Promise<void> {
     if (this.table) return;
     if (this.initPromise) return this.initPromise;
-    this.initPromise = this.doInit();
+    this.initPromise = this.doInit().catch((err) => {
+      this.initPromise = null;
+      throw err;
+    });
     return this.initPromise;
   }
 
@@ -60,7 +100,10 @@ export class MemoryDB {
   }
 
   async store(
-    entry: Omit<AgentMemoryRow, "id" | "created_at" | "updated_at" | "active_count">,
+    entry: Omit<
+      AgentMemoryRow,
+      "id" | "created_at" | "updated_at" | "active_count"
+    >,
   ): Promise<AgentMemoryRow> {
     await this.ensureInit();
     const now = Date.now();
@@ -86,6 +129,7 @@ export class MemoryDB {
     let query = this.table!.vectorSearch(vector).limit(limit);
 
     if (categoryFilter) {
+      assertCategory(categoryFilter);
       query = query.where(`category = '${categoryFilter}'`);
     }
 
@@ -95,49 +139,36 @@ export class MemoryDB {
       .map((row) => {
         const distance = (row._distance as number) ?? 0;
         const score = 1 / (1 + distance);
-        return {
-          entry: {
-            id: row.id as string,
-            category: row.category as MemoryCategory,
-            abstract: row.abstract as string,
-            overview: row.overview as string,
-            content: row.content as string,
-            vector: row.vector as number[],
-            source_session: row.source_session as string,
-            active_count: row.active_count as number,
-            created_at: row.created_at as number,
-            updated_at: row.updated_at as number,
-          },
-          score,
-        };
+        return { entry: rowToEntry(row as Record<string, unknown>), score };
       })
       .filter((r) => r.score >= minScore);
   }
 
   async findByCategory(category: MemoryCategory): Promise<AgentMemoryRow[]> {
     await this.ensureInit();
+    assertCategory(category);
     const results = await this.table!.query()
       .where(`category = '${category}'`)
       .limit(100)
       .toArray();
 
-    return results.map((row) => ({
-      id: row.id as string,
-      category: row.category as MemoryCategory,
-      abstract: row.abstract as string,
-      overview: row.overview as string,
-      content: row.content as string,
-      vector: row.vector as number[],
-      source_session: row.source_session as string,
-      active_count: row.active_count as number,
-      created_at: row.created_at as number,
-      updated_at: row.updated_at as number,
-    }));
+    return results.map((row) => rowToEntry(row as Record<string, unknown>));
+  }
+
+  async getById(id: string): Promise<AgentMemoryRow | null> {
+    await this.ensureInit();
+    assertUuid(id);
+    const results = await this.table!.query()
+      .where(`id = '${id}'`)
+      .limit(1)
+      .toArray();
+    if (results.length === 0) return null;
+    return rowToEntry(results[0] as Record<string, unknown>);
   }
 
   async update(id: string, fields: Partial<AgentMemoryRow>): Promise<void> {
     await this.ensureInit();
-    // LanceDB update: delete + re-add
+    assertUuid(id);
     const existing = await this.table!.query()
       .where(`id = '${id}'`)
       .limit(1)
@@ -152,18 +183,16 @@ export class MemoryDB {
       updated_at: Date.now(),
     };
 
-    await this.table!.delete(`id = '${id}'`);
+    // Add-then-delete reduces crash window vs delete-then-add
     await this.table!.add([updated]);
-  }
-
-  async delete(id: string): Promise<boolean> {
-    await this.ensureInit();
-    await this.table!.delete(`id = '${id}'`);
-    return true;
+    await this.table!.delete(
+      `id = '${id}' AND updated_at != ${updated.updated_at as number}`,
+    );
   }
 
   async incrementActiveCount(id: string): Promise<void> {
     await this.ensureInit();
+    assertUuid(id);
     const existing = await this.table!.query()
       .where(`id = '${id}'`)
       .limit(1)
@@ -172,13 +201,14 @@ export class MemoryDB {
     if (existing.length === 0) return;
 
     const row = existing[0];
-    await this.table!.delete(`id = '${id}'`);
-    await this.table!.add([
-      {
-        ...row,
-        active_count: ((row.active_count as number) || 0) + 1,
-        updated_at: Date.now(),
-      },
-    ]);
+    const updated = {
+      ...row,
+      active_count: ((row.active_count as number) || 0) + 1,
+      updated_at: Date.now(),
+    };
+    await this.table!.add([updated]);
+    await this.table!.delete(
+      `id = '${id}' AND updated_at != ${updated.updated_at as number}`,
+    );
   }
 }
