@@ -219,4 +219,5 @@ function extractConversationText(
   return truncated + "\u2026";
 }
 
+export { extractConversationText };
 export default eproMemoryPlugin;

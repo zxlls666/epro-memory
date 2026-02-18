@@ -19,13 +19,13 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VALID_CATEGORIES = new Set<string>(MEMORY_CATEGORIES);
 
-function assertCategory(value: string): void {
+export function assertCategory(value: string): void {
   if (!VALID_CATEGORIES.has(value)) {
     throw new Error(`Invalid memory category: ${value}`);
   }
 }
 
-function assertUuid(value: string): void {
+export function assertUuid(value: string): void {
   if (!UUID_RE.test(value)) {
     throw new Error(`Invalid UUID: ${value}`);
   }

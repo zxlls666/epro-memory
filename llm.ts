@@ -33,7 +33,7 @@ export class LlmClient {
 }
 
 /** Extract JSON from LLM response that may contain markdown fences. */
-function parseJsonFromResponse<T>(text: string): T | null {
+export function parseJsonFromResponse<T>(text: string): T | null {
   // Try direct parse first
   try {
     return JSON.parse(text) as T;
