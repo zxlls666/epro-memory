@@ -132,10 +132,10 @@ describeIfIntegration("MemoryDB (LanceDB integration)", () => {
       Array.from({ length: burst }, () => db.incrementActiveCount(stored.id)),
     );
 
-    // With write lock, increments are serialized — but ID shifts each time.
-    // After first increment, id stays stable. Check via findByCategory.
-    const byCategory = await db.findByCategory("events");
-    const maxCount = Math.max(...byCategory.map((r) => r.active_count));
-    expect(maxCount).toBeGreaterThanOrEqual(burst);
+    // Write lock serializes all increments; ID stays stable throughout.
+    const loaded = await db.getById(stored.id);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.id).toBe(stored.id);
+    expect(loaded!.active_count).toBe(burst);
   });
 });
