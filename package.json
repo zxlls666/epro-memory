@@ -18,7 +18,9 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "RUN_LANCEDB_INTEGRATION=1 vitest run tests/db.integration.test.ts",
+    "test:all": "vitest run && RUN_LANCEDB_INTEGRATION=1 vitest run tests/db.integration.test.ts"
   },
   "moltbot": {
     "extensions": [
