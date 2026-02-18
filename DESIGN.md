@@ -6,7 +6,7 @@ Mac Mini worker bots need persistent experience memory across sessions. The exis
 
 **Goal:** New OpenClaw plugin. Coexist with memory-lancedb initially, replace it when stable.
 
-**Constraint:** `/Users/studio/projects/agent-memory/` is NOT touched — that's memX-specific.
+**Constraint:** The separate `agent-memory/` repository is NOT touched — that's memX-specific.
 
 ---
 
