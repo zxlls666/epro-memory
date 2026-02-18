@@ -1,3 +1,5 @@
+[中文](README.zh-CN.md) | **English**
+
 # epro-memory
 
 LLM-powered agent memory plugin with 6-category classification and L0/L1/L2 tiered structure. Built on [LanceDB](https://lancedb.com/) for vector storage and OpenAI-compatible APIs for extraction and embedding.
@@ -110,6 +112,40 @@ pnpm test:integration
 # All tests
 pnpm test:all
 ```
+
+## Technical Choices
+
+| Component | Choice | Why |
+|-----------|--------|-----|
+| Vector storage | [LanceDB](https://lancedb.com/) | Embedded, serverless, no external DB process needed |
+| Config validation | [TypeBox](https://github.com/sinclairzx81/typebox) | JSON Schema-compatible type-safe validation at runtime |
+| Embedding & LLM | OpenAI-compatible API | Broad provider support via `baseUrl` override |
+| Memory classification | 6-category system | Balances granularity and merge semantics — ported from [OpenViking](https://github.com/toby-bridges/OpenViking) |
+| Tiered structure | L0 / L1 / L2 | Inject only what's needed: one-liner for recall, full narrative on demand |
+| Dedup strategy | Vector pre-filter + LLM decision | Eliminates duplicates without losing nuance |
+
+## Testing
+
+106 unit tests across 7 test suites. Integration tests run separately against a real LanceDB instance.
+
+| Suite | Tests | Covers |
+|-------|-------|--------|
+| config | 23 | Schema validation, type coercion, range checks, defaults |
+| validators | 19 | UUID format, category allowlist, SQL injection rejection |
+| llm-parser | 22 | JSON extraction from LLM responses, edge cases |
+| conversation | 17 | Message extraction, truncation, content block formats |
+| extractor | 13 | Memory extraction pipeline, candidate parsing |
+| deduplicator | 12 | Vector dedup, merge decisions, category-aware logic |
+| db.integration | 7 | LanceDB CRUD, vector search, concurrent writes (skipped in CI) |
+
+```bash
+pnpm test          # unit tests
+pnpm test:all      # unit + integration
+```
+
+## Acknowledgments
+
+The 6-category memory classification, L0/L1/L2 tiered structure, and prompt templates (extraction, dedup, merge) are ported from the [OpenViking](https://github.com/toby-bridges/OpenViking) project — an open-source LLM agent framework with persistent memory.
 
 ## License
 
