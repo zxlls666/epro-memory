@@ -1,0 +1,19 @@
+{
+  "name": "@moltbot/epro-memory",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "ePro v2 — LLM-powered agent memory with 6-category classification and L0/L1/L2 tiered structure",
+  "moltbot": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "dependencies": {
+    "@lancedb/lancedb": "^0.23.0",
+    "@sinclair/typebox": "0.34.47",
+    "openai": "^6.16.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

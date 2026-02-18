@@ -1,0 +1,57 @@
+/**
+ * Config schema for ePro memory plugin.
+ */
+
+import { Type, type Static } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
+
+const EmbeddingConfig = Type.Object({
+  model: Type.Optional(Type.String()),
+  apiKey: Type.String(),
+  baseUrl: Type.Optional(Type.String()),
+});
+
+const LlmConfig = Type.Object({
+  model: Type.Optional(Type.String()),
+  apiKey: Type.String(),
+  baseUrl: Type.Optional(Type.String()),
+});
+
+export const EproConfigSchema = Type.Object({
+  embedding: EmbeddingConfig,
+  llm: LlmConfig,
+  dbPath: Type.Optional(Type.String()),
+  autoCapture: Type.Optional(Type.Boolean()),
+  autoRecall: Type.Optional(Type.Boolean()),
+  recallLimit: Type.Optional(Type.Number()),
+  recallMinScore: Type.Optional(Type.Number()),
+  extractMinMessages: Type.Optional(Type.Number()),
+  extractMaxChars: Type.Optional(Type.Number()),
+});
+
+export type EproConfig = Static<typeof EproConfigSchema>;
+
+export const DEFAULTS = {
+  embeddingModel: "text-embedding-3-small",
+  llmModel: "gpt-4o-mini",
+  dbPath: "~/.clawdbot/memory/epro-lancedb",
+  autoCapture: true,
+  autoRecall: true,
+  recallLimit: 5,
+  recallMinScore: 0.3,
+  extractMinMessages: 4,
+  extractMaxChars: 8000,
+} as const;
+
+const EMBEDDING_DIMENSIONS: Record<string, number> = {
+  "text-embedding-3-small": 1536,
+  "text-embedding-3-large": 3072,
+};
+
+export function vectorDimsForModel(model: string): number {
+  return EMBEDDING_DIMENSIONS[model] ?? 1536;
+}
+
+export function parseConfig(raw: unknown): EproConfig {
+  return Value.Cast(EproConfigSchema, raw) as EproConfig;
+}

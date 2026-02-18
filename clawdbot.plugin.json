@@ -1,0 +1,50 @@
+{
+  "id": "epro-memory",
+  "kind": "memory",
+  "uiHints": {
+    "embedding.apiKey": {
+      "label": "Embedding API Key",
+      "sensitive": true,
+      "placeholder": "sk-proj-...",
+      "help": "API key for embeddings (or use ${OPENAI_API_KEY})"
+    },
+    "llm.apiKey": {
+      "label": "LLM API Key",
+      "sensitive": true,
+      "placeholder": "sk-proj-...",
+      "help": "API key for LLM extraction (or use ${OPENAI_API_KEY})"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "embedding": {
+        "type": "object",
+        "properties": {
+          "model": { "type": "string" },
+          "apiKey": { "type": "string" },
+          "baseUrl": { "type": "string" }
+        },
+        "required": ["apiKey"]
+      },
+      "llm": {
+        "type": "object",
+        "properties": {
+          "model": { "type": "string" },
+          "apiKey": { "type": "string" },
+          "baseUrl": { "type": "string" }
+        },
+        "required": ["apiKey"]
+      },
+      "dbPath": { "type": "string" },
+      "autoCapture": { "type": "boolean" },
+      "autoRecall": { "type": "boolean" },
+      "recallLimit": { "type": "number" },
+      "recallMinScore": { "type": "number" },
+      "extractMinMessages": { "type": "number" },
+      "extractMaxChars": { "type": "number" }
+    },
+    "required": ["embedding", "llm"]
+  }
+}
