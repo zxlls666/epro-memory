@@ -195,7 +195,14 @@ export class MemoryDB {
 
       // Strip Arrow/Lance internal fields via rowToEntry before writing back
       const clean = rowToEntry(existing[0] as Record<string, unknown>);
-      const updated = { ...clean, ...fields, updated_at: Date.now() };
+      // Prevent callers from overwriting immutable fields
+      const {
+        id: _id,
+        created_at: _ca,
+        source_session: _ss,
+        ...safeFields
+      } = fields;
+      const updated = { ...clean, ...safeFields, updated_at: Date.now() };
       // Delete then add with same ID; restore original on add failure
       await this.table!.delete(`id = '${id}'`);
       try {

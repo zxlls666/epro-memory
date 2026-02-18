@@ -103,6 +103,27 @@ describeIfIntegration("MemoryDB (LanceDB integration)", () => {
     expect(loaded!.id).toBe(stored.id);
   });
 
+  it("update ignores attempts to overwrite id, created_at, source_session", async () => {
+    const stored = await db.store(makeEntry("events", 1));
+    const originalId = stored.id;
+    const originalCreatedAt = stored.created_at;
+    const originalSession = stored.source_session;
+
+    await db.update(stored.id, {
+      abstract: "changed",
+      id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      created_at: 0,
+      source_session: "hijacked",
+    } as any);
+
+    const loaded = await db.getById(originalId);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.id).toBe(originalId);
+    expect(loaded!.created_at).toBe(originalCreatedAt);
+    expect(loaded!.source_session).toBe(originalSession);
+    expect(loaded!.abstract).toBe("changed");
+  });
+
   it("concurrent incrementActiveCount is lossless", async () => {
     const stored = await db.store(makeEntry("events", 1));
     const burst = 20;
