@@ -37,6 +37,20 @@ const CheckpointConfig = Type.Object({
   autoRecoverOnStart: Type.Optional(Type.Boolean()),
 });
 
+const ReporterConfig = Type.Object({
+  enabled: Type.Optional(Type.Boolean()),
+  logPath: Type.Optional(Type.String()),
+  dailySummary: Type.Optional(Type.Boolean()),
+  notifyOnPivotal: Type.Optional(Type.Boolean()),
+});
+
+const BootstrapConfig = Type.Object({
+  enabled: Type.Optional(Type.Boolean()),
+  patternPromotionThreshold: Type.Optional(Type.Number()),
+  skillDraftPath: Type.Optional(Type.String()),
+  minConfidence: Type.Optional(Type.Number()),
+});
+
 const EproConfigSchema = Type.Object({
   embedding: EmbeddingConfig,
   llm: LlmConfig,
@@ -50,12 +64,16 @@ const EproConfigSchema = Type.Object({
   decay: Type.Optional(DecayConfig),
   qmdProjection: Type.Optional(QmdProjectionConfig),
   checkpoint: Type.Optional(CheckpointConfig),
+  reporting: Type.Optional(ReporterConfig),
+  bootstrap: Type.Optional(BootstrapConfig),
 });
 
 type EproConfig = Static<typeof EproConfigSchema>;
 export type DecayConfigType = Static<typeof DecayConfig>;
 export type QmdProjectionConfigType = Static<typeof QmdProjectionConfig>;
 export type CheckpointConfigType = Static<typeof CheckpointConfig>;
+export type ReporterConfigType = Static<typeof ReporterConfig>;
+export type BootstrapConfigType = Static<typeof BootstrapConfig>;
 
 export const DEFAULTS = {
   embeddingModel: "text-embedding-3-small",
@@ -83,6 +101,18 @@ export const DEFAULTS = {
     enabled: false,
     path: "~/.clawdbot/memory/checkpoints",
     autoRecoverOnStart: true,
+  },
+  reporting: {
+    enabled: false,
+    logPath: "~/.clawdbot/memory/reports",
+    dailySummary: true,
+    notifyOnPivotal: true,
+  },
+  bootstrap: {
+    enabled: false,
+    patternPromotionThreshold: 5,
+    skillDraftPath: "~/.clawdbot/memory/skill-drafts",
+    minConfidence: 0.7,
   },
 } as const;
 
