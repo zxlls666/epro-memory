@@ -18,7 +18,7 @@ LLM-powered agent memory plugin with 6-category classification and L0/L1/L2 tier
 ### Install
 
 ```bash
-pnpm add @moltbot/epro-memory
+pnpm add @tobybridges/epro-memory
 ```
 
 ### Configure

@@ -18,7 +18,7 @@
 ### 安装
 
 ```bash
-pnpm add @moltbot/epro-memory
+pnpm add @tobybridges/epro-memory
 ```
 
 ### 配置
