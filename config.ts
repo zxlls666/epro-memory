@@ -17,6 +17,26 @@ const LlmConfig = Type.Object({
   baseUrl: Type.Optional(Type.String()),
 });
 
+const DecayConfig = Type.Object({
+  enabled: Type.Optional(Type.Boolean()),
+  halfLifeDays: Type.Optional(Type.Number()),
+  activeWeight: Type.Optional(Type.Number()),
+});
+
+const QmdProjectionConfig = Type.Object({
+  enabled: Type.Optional(Type.Boolean()),
+  qmdPath: Type.Optional(Type.String()),
+  includeL1: Type.Optional(Type.Boolean()),
+  categorySeparateFiles: Type.Optional(Type.Boolean()),
+  dailyTrigger: Type.Optional(Type.Boolean()),
+});
+
+const CheckpointConfig = Type.Object({
+  enabled: Type.Optional(Type.Boolean()),
+  path: Type.Optional(Type.String()),
+  autoRecoverOnStart: Type.Optional(Type.Boolean()),
+});
+
 const EproConfigSchema = Type.Object({
   embedding: EmbeddingConfig,
   llm: LlmConfig,
@@ -27,9 +47,15 @@ const EproConfigSchema = Type.Object({
   recallMinScore: Type.Optional(Type.Number()),
   extractMinMessages: Type.Optional(Type.Number()),
   extractMaxChars: Type.Optional(Type.Number()),
+  decay: Type.Optional(DecayConfig),
+  qmdProjection: Type.Optional(QmdProjectionConfig),
+  checkpoint: Type.Optional(CheckpointConfig),
 });
 
 type EproConfig = Static<typeof EproConfigSchema>;
+export type DecayConfigType = Static<typeof DecayConfig>;
+export type QmdProjectionConfigType = Static<typeof QmdProjectionConfig>;
+export type CheckpointConfigType = Static<typeof CheckpointConfig>;
 
 export const DEFAULTS = {
   embeddingModel: "text-embedding-3-small",
@@ -41,6 +67,23 @@ export const DEFAULTS = {
   recallMinScore: 0.3,
   extractMinMessages: 4,
   extractMaxChars: 8000,
+  decay: {
+    enabled: false,
+    halfLifeDays: 30,
+    activeWeight: 0.1,
+  },
+  qmdProjection: {
+    enabled: false,
+    qmdPath: "~/.clawdbot/memory/qmd",
+    includeL1: true,
+    categorySeparateFiles: true,
+    dailyTrigger: true,
+  },
+  checkpoint: {
+    enabled: false,
+    path: "~/.clawdbot/memory/checkpoints",
+    autoRecoverOnStart: true,
+  },
 } as const;
 
 const EMBEDDING_DIMENSIONS: Record<string, number> = {
@@ -78,6 +121,8 @@ const NUMERIC_FIELDS = [
   "extractMaxChars",
 ] as const;
 
+const DECAY_NUMERIC_FIELDS = ["halfLifeDays", "activeWeight"] as const;
+
 export function parseConfig(raw: unknown): EproConfig {
   // Reject non-numeric types on numeric fields BEFORE Value.Cast coerces them
   if (raw && typeof raw === "object") {
@@ -94,6 +139,25 @@ export function parseConfig(raw: unknown): EproConfig {
         );
       }
     }
+
+    // Validate decay config numeric fields
+    const decayObj = obj.decay as Record<string, unknown> | undefined;
+    if (decayObj && typeof decayObj === "object") {
+      for (const field of DECAY_NUMERIC_FIELDS) {
+        const v = decayObj[field];
+        if (v === undefined) continue;
+        if (v === null) {
+          throw new Error(
+            `epro-memory: decay.${field} must be a number, got null`,
+          );
+        }
+        if (typeof v !== "number" || Number.isNaN(v)) {
+          throw new Error(
+            `epro-memory: decay.${field} must be a number, got ${Number.isNaN(v) ? "NaN" : typeof v}`,
+          );
+        }
+      }
+    }
   }
 
   const config = Value.Cast(EproConfigSchema, raw);
@@ -107,5 +171,12 @@ export function parseConfig(raw: unknown): EproConfig {
   assertRange("recallMinScore", config.recallMinScore, 0, 1);
   assertRange("extractMinMessages", config.extractMinMessages, 1, 100);
   assertRange("extractMaxChars", config.extractMaxChars, 100, 100_000);
+
+  // Validate decay config ranges
+  if (config.decay) {
+    assertRange("decay.halfLifeDays", config.decay.halfLifeDays, 1, 365);
+    assertRange("decay.activeWeight", config.decay.activeWeight, 0, 1);
+  }
+
   return config as EproConfig;
 }

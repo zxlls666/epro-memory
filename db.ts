@@ -11,6 +11,7 @@ import {
   type MemoryCategory,
   type PluginLogger,
 } from "./types.js";
+import { type DecayConfigType, DEFAULTS } from "./config.js";
 
 const TABLE_NAME = "agent_memories";
 
@@ -46,6 +47,37 @@ function rowToEntry(row: Record<string, unknown>): AgentMemoryRow {
   };
 }
 
+/**
+ * Computes decay-adjusted score for memory search results.
+ *
+ * Formula:
+ *   decayScore = vectorScore * timeDecay * activeBoost
+ *
+ * Where:
+ *   - timeDecay = 2^(-ageDays / halfLifeDays)  (exponential decay)
+ *   - activeBoost = 1 + activeWeight * log(1 + activeCount)  (logarithmic boost)
+ *
+ * @param vectorScore - Original similarity score from vector search (0-1)
+ * @param createdAt - Memory creation timestamp in milliseconds
+ * @param activeCount - Number of times this memory was activated/recalled
+ * @param config - Decay configuration
+ * @returns Decay-adjusted score
+ */
+export function computeDecayScore(
+  vectorScore: number,
+  createdAt: number,
+  activeCount: number,
+  config: Required<DecayConfigType>,
+): number {
+  if (!config.enabled) return vectorScore;
+
+  const ageDays = (Date.now() - createdAt) / (1000 * 60 * 60 * 24);
+  const timeDecay = Math.pow(2, -ageDays / config.halfLifeDays);
+  const activeBoost = 1 + config.activeWeight * Math.log(1 + activeCount);
+
+  return vectorScore * timeDecay * activeBoost;
+}
+
 export type MemorySearchResult = {
   entry: AgentMemoryRow;
   score: number;
@@ -56,12 +88,21 @@ export class MemoryDB {
   private table: lancedb.Table | null = null;
   private initPromise: Promise<void> | null = null;
   private writeLock: Promise<void> = Promise.resolve();
+  private readonly decayConfig: Required<DecayConfigType>;
 
   constructor(
     private readonly dbPath: string,
     private readonly vectorDim: number,
     private readonly logger: PluginLogger,
-  ) {}
+    decayConfig?: DecayConfigType,
+  ) {
+    // Merge provided config with defaults
+    this.decayConfig = {
+      enabled: decayConfig?.enabled ?? DEFAULTS.decay.enabled,
+      halfLifeDays: decayConfig?.halfLifeDays ?? DEFAULTS.decay.halfLifeDays,
+      activeWeight: decayConfig?.activeWeight ?? DEFAULTS.decay.activeWeight,
+    };
+  }
 
   /** Serialize all write operations to prevent concurrent read-modify-write races. */
   private async withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
@@ -142,7 +183,10 @@ export class MemoryDB {
   ): Promise<MemorySearchResult[]> {
     await this.ensureInit();
 
-    let query = this.table!.vectorSearch(vector).limit(limit);
+    // When decay is enabled, fetch more candidates to ensure enough results after scoring
+    const fetchLimit = this.decayConfig.enabled ? Math.max(limit * 3, 20) : limit;
+
+    let query = this.table!.vectorSearch(vector).limit(fetchLimit);
 
     if (categoryFilter) {
       assertCategory(categoryFilter);
@@ -154,10 +198,22 @@ export class MemoryDB {
     return results
       .map((row) => {
         const distance = (row._distance as number) ?? 0;
-        const score = 1 / (1 + distance);
-        return { entry: rowToEntry(row as Record<string, unknown>), score };
+        const vectorScore = 1 / (1 + distance);
+        const entry = rowToEntry(row as Record<string, unknown>);
+
+        // Apply decay scoring
+        const score = computeDecayScore(
+          vectorScore,
+          entry.created_at,
+          entry.active_count,
+          this.decayConfig,
+        );
+
+        return { entry, score };
       })
-      .filter((r) => r.score >= minScore);
+      .sort((a, b) => b.score - a.score)
+      .filter((r) => r.score >= minScore)
+      .slice(0, limit);
   }
 
   async findByCategory(category: MemoryCategory): Promise<AgentMemoryRow[]> {
@@ -241,5 +297,18 @@ export class MemoryDB {
         throw err;
       }
     });
+  }
+
+  /**
+   * Get all memories from the database.
+   * Used by QMD projection to generate daily summaries.
+   *
+   * @param maxLimit - Maximum number of records to return (default: 10000)
+   * @returns Array of all memory entries
+   */
+  async getAll(maxLimit: number = 10000): Promise<AgentMemoryRow[]> {
+    await this.ensureInit();
+    const results = await this.table!.query().limit(maxLimit).toArray();
+    return results.map((row) => rowToEntry(row as Record<string, unknown>));
   }
 }

@@ -7,6 +7,7 @@
  * Hooks:
  * - before_agent_start: recall relevant memories, inject as <agent-experience>
  * - agent_end: extract memories from conversation, dedup, persist to LanceDB
+ * - heartbeat: trigger daily QMD projection (if enabled)
  */
 
 import { parseConfig, DEFAULTS, vectorDimsForModel } from "./config.js";
@@ -15,6 +16,18 @@ import { Embeddings } from "./embeddings.js";
 import { LlmClient } from "./llm.js";
 import { MemoryDeduplicator } from "./deduplicator.js";
 import { MemoryExtractor } from "./extractor.js";
+import {
+  projectToQMD,
+  getLastProjectionTime,
+  setLastProjectionTime,
+  shouldRunProjection,
+  type ProjectionConfig,
+} from "./projector.js";
+import {
+  CheckpointManager,
+  type CheckpointConfig,
+  type ExtractionCheckpoint,
+} from "./checkpoint.js";
 import type { PluginLogger } from "./types.js";
 
 type MoltbotPluginApi = {
@@ -55,9 +68,34 @@ const eproMemoryPlugin = {
       cfg.extractMinMessages ?? DEFAULTS.extractMinMessages;
     const extractMaxChars = cfg.extractMaxChars ?? DEFAULTS.extractMaxChars;
 
+    // QMD Projection config
+    const qmdProjectionConfig: ProjectionConfig = {
+      enabled: cfg.qmdProjection?.enabled ?? DEFAULTS.qmdProjection.enabled,
+      qmdPath: api.resolvePath(
+        cfg.qmdProjection?.qmdPath ?? DEFAULTS.qmdProjection.qmdPath,
+      ),
+      includeL1:
+        cfg.qmdProjection?.includeL1 ?? DEFAULTS.qmdProjection.includeL1,
+      categorySeparateFiles:
+        cfg.qmdProjection?.categorySeparateFiles ??
+        DEFAULTS.qmdProjection.categorySeparateFiles,
+      dailyTrigger:
+        cfg.qmdProjection?.dailyTrigger ?? DEFAULTS.qmdProjection.dailyTrigger,
+    };
+
+    // Checkpoint config (P2-002: Resumable extraction)
+    const checkpointEnabled =
+      cfg.checkpoint?.enabled ?? DEFAULTS.checkpoint.enabled;
+    const checkpointPath = api.resolvePath(
+      cfg.checkpoint?.path ?? DEFAULTS.checkpoint.path,
+    );
+    const checkpointAutoRecover =
+      cfg.checkpoint?.autoRecoverOnStart ??
+      DEFAULTS.checkpoint.autoRecoverOnStart;
+
     // Initialize services
     const vectorDim = vectorDimsForModel(embeddingModel);
-    const db = new MemoryDB(dbPath, vectorDim, logger);
+    const db = new MemoryDB(dbPath, vectorDim, logger, cfg.decay);
     const embeddings = new Embeddings(
       cfg.embedding.apiKey,
       embeddingModel,
@@ -73,13 +111,43 @@ const eproMemoryPlugin = {
       logger,
     );
 
+    // Initialize checkpoint manager (P2-002)
+    const checkpointMgr = checkpointEnabled
+      ? new CheckpointManager(checkpointPath, logger)
+      : null;
+
     // Register service lifecycle
     api.registerService({
       id: "epro-memory",
-      start: () => {
+      start: async () => {
         logger.info(
-          `epro-memory: initialized (db: ${dbPath}, embed: ${embeddingModel}, llm: ${llmModel})`,
+          `epro-memory: initialized (db: ${dbPath}, embed: ${embeddingModel}, llm: ${llmModel}` +
+            (checkpointEnabled ? `, checkpoint: ${checkpointPath}` : "") +
+            ")",
         );
+
+        // Auto-recover incomplete extractions on startup (P2-002)
+        if (checkpointMgr && checkpointAutoRecover) {
+          try {
+            const resumeResults = await extractor.resumeIncomplete(checkpointMgr);
+            if (resumeResults.length > 0) {
+              const total = resumeResults.reduce(
+                (acc, r) => ({
+                  created: acc.created + r.created,
+                  merged: acc.merged + r.merged,
+                  skipped: acc.skipped + r.skipped,
+                }),
+                { created: 0, merged: 0, skipped: 0 },
+              );
+              logger.info(
+                `epro-memory: auto-recovered ${resumeResults.length} incomplete extractions ` +
+                  `(created=${total.created}, merged=${total.merged}, skipped=${total.skipped})`,
+              );
+            }
+          } catch (err) {
+            logger.warn(`epro-memory: auto-recovery failed: ${String(err)}`);
+          }
+        }
       },
     });
 
@@ -153,16 +221,60 @@ const eproMemoryPlugin = {
             const sessionKey = ctx?.sessionKey ?? "unknown";
             const user = ctx?.agentId ?? "agent";
 
-            await extractor.extractAndPersist(
-              conversationText,
-              sessionKey,
-              user,
-            );
+            // Use checkpoint-based extraction if enabled (P2-002)
+            if (checkpointMgr) {
+              await extractor.extractWithCheckpoint(
+                conversationText,
+                sessionKey,
+                user,
+                checkpointMgr,
+              );
+            } else {
+              await extractor.extractAndPersist(
+                conversationText,
+                sessionKey,
+                user,
+              );
+            }
           } catch (err) {
             logger.warn(`epro-memory: extraction failed: ${String(err)}`);
           }
         },
       );
+    }
+
+    // Hook: heartbeat — trigger daily QMD projection
+    if (qmdProjectionConfig.enabled && qmdProjectionConfig.dailyTrigger) {
+      api.on("heartbeat", async () => {
+        try {
+          const lastProjection = await getLastProjectionTime(
+            qmdProjectionConfig.qmdPath,
+          );
+          const now = Date.now();
+
+          if (!shouldRunProjection(lastProjection, now)) {
+            return;
+          }
+
+          logger.info("epro-memory: starting daily QMD projection");
+
+          const memories = await db.getAll();
+          const result = await projectToQMD(
+            memories,
+            qmdProjectionConfig,
+            qmdProjectionConfig.qmdPath,
+            logger,
+          );
+
+          await setLastProjectionTime(qmdProjectionConfig.qmdPath, now);
+
+          logger.info(
+            `epro-memory: QMD projection complete (${result.categoryFilesWritten} category files, ${result.totalMemories} memories)`,
+          );
+        } catch (err) {
+          logger.warn(`epro-memory: QMD projection failed: ${String(err)}`);
+        }
+      });
     }
   },
 };
@@ -228,5 +340,6 @@ export function sanitizeForContext(text: string): string {
   return text.replace(/<(\/?)([a-zA-Z])/g, "< $1$2");
 }
 
-export { extractConversationText };
+export { extractConversationText, CheckpointManager };
+export type { CheckpointConfig, ExtractionCheckpoint };
 export default eproMemoryPlugin;
