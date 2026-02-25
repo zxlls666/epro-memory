@@ -236,12 +236,12 @@ export class MemoryDB {
       .slice(0, limit);
   }
 
-  async findByCategory(category: MemoryCategory): Promise<AgentMemoryRow[]> {
+  async findByCategory(category: MemoryCategory, limit: number = 100): Promise<AgentMemoryRow[]> {
     await this.ensureInit();
     assertCategory(category);
     const results = await this.table!.query()
       .where(`category = '${category}'`)
-      .limit(100)
+      .limit(limit)
       .toArray();
 
     return results.map((row) => rowToEntry(row as Record<string, unknown>));

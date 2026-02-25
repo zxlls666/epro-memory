@@ -346,7 +346,7 @@ const eproMemoryPlugin = {
     if (bootstrapMgr) {
       api.on("heartbeat", async () => {
         try {
-          const patterns = await db.findByCategory("patterns");
+          const patterns = await db.findByCategory("patterns", 10000);
           for (const pattern of patterns) {
             if (!bootstrapMgr.shouldConsider(pattern)) continue;
 
