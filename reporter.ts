@@ -7,7 +7,7 @@
  * @see ITERATION-SPEC.md P2-001
  */
 
-import { writeFile, readFile, mkdir, appendFile } from "fs/promises";
+import { writeFile, readFile, mkdir, appendFile, access } from "fs/promises";
 import { join, dirname } from "path";
 import type { ExtractionStats, PluginLogger } from "./types.js";
 
@@ -283,10 +283,19 @@ ${reports
 
     const targetDate =
       date || new Date(Date.now() - 86400000).toISOString().split("T")[0];
-    const content = await this.generateDailyReport(targetDate);
 
     await this.ensureDir();
     const filepath = join(this.logPath, `daily-${targetDate}.md`);
+
+    // Skip if already generated today (方案 A: file-exists gate)
+    try {
+      await access(filepath);
+      return null; // Already exists
+    } catch {
+      // File doesn't exist, proceed
+    }
+
+    const content = await this.generateDailyReport(targetDate);
     await writeFile(filepath, content, "utf-8");
 
     return filepath;
