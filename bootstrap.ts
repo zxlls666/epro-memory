@@ -89,10 +89,7 @@ export class BootstrapManager {
     llmClient?: LLMClient,
   ) {
     this.config = config;
-    this.draftPath = config.skillDraftPath.replace(
-      /^~/,
-      process.env.HOME || "",
-    );
+    this.draftPath = config.skillDraftPath;
     this.logger = logger;
     this.llmClient = llmClient;
   }

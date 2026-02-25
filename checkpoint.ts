@@ -53,8 +53,7 @@ export class CheckpointManager {
   private logger: PluginLogger;
 
   constructor(basePath: string, logger: PluginLogger) {
-    // Expand ~ to home directory
-    this.basePath = basePath.replace(/^~/, process.env.HOME || "");
+    this.basePath = basePath;
     this.logger = logger;
   }
 

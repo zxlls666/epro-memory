@@ -64,7 +64,7 @@ export class MemoryReporter {
 
   constructor(config: ReporterConfig, logger: PluginLogger) {
     this.config = config;
-    this.logPath = config.logPath.replace(/^~/, process.env.HOME || "");
+    this.logPath = config.logPath;
     this.logger = logger;
   }
 

@@ -9,6 +9,7 @@ const EmbeddingConfig = Type.Object({
   model: Type.Optional(Type.String()),
   apiKey: Type.String(),
   baseUrl: Type.Optional(Type.String()),
+  dimensions: Type.Optional(Type.Number()),
 });
 
 const LlmConfig = Type.Object({
@@ -203,6 +204,9 @@ export function parseConfig(raw: unknown): EproConfig {
   assertRange("recallMinScore", config.recallMinScore, 0, 1);
   assertRange("extractMinMessages", config.extractMinMessages, 1, 100);
   assertRange("extractMaxChars", config.extractMaxChars, 100, 100_000);
+
+  // Validate embedding dimensions
+  assertRange("embedding.dimensions", config.embedding?.dimensions, 64, 8192);
 
   // Validate decay config ranges
   if (config.decay) {

@@ -96,7 +96,7 @@ const eproMemoryPlugin = {
       DEFAULTS.checkpoint.autoRecoverOnStart;
 
     // Initialize services
-    const vectorDim = vectorDimsForModel(embeddingModel);
+    const vectorDim = cfg.embedding.dimensions ?? vectorDimsForModel(embeddingModel);
     const db = new MemoryDB(dbPath, vectorDim, logger, cfg.decay);
     const embeddings = new Embeddings(
       cfg.embedding.apiKey,

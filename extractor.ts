@@ -136,8 +136,16 @@ export class MemoryExtractor {
         await this.handleMerge(candidate, result.matchId);
         stats.merged++;
       } else {
-        // events/cases don't support merge, treat as skip
-        stats.skipped++;
+        // events/cases don't support merge — create as new record to avoid data loss
+        await this.db.store({
+          category: candidate.category,
+          abstract: candidate.abstract,
+          overview: candidate.overview,
+          content: candidate.content,
+          vector,
+          source_session: sessionKey,
+        });
+        stats.created++;
       }
     } else {
       // skip
