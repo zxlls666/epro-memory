@@ -275,6 +275,24 @@ ${reports
   }
 
   /**
+   * Generate and save yesterday's daily summary to a markdown file.
+   * Returns the file path if written, null if no data or disabled.
+   */
+  async saveDailyReport(date?: string): Promise<string | null> {
+    if (!this.config.dailySummary) return null;
+
+    const targetDate =
+      date || new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    const content = await this.generateDailyReport(targetDate);
+
+    await this.ensureDir();
+    const filepath = join(this.logPath, `daily-${targetDate}.md`);
+    await writeFile(filepath, content, "utf-8");
+
+    return filepath;
+  }
+
+  /**
    * Create a report from extraction stats.
    */
   createReport(

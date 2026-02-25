@@ -342,6 +342,20 @@ const eproMemoryPlugin = {
       });
     }
 
+    // Hook: heartbeat — daily summary report (P2-001)
+    if (reporter && reporterConfig.dailySummary) {
+      api.on("heartbeat", async () => {
+        try {
+          const filepath = await reporter.saveDailyReport();
+          if (filepath) {
+            logger.info(`epro-memory: daily summary saved to ${filepath}`);
+          }
+        } catch (err) {
+          logger.warn(`epro-memory: daily summary failed: ${String(err)}`);
+        }
+      });
+    }
+
     // Hook: heartbeat — bootstrap pattern-to-skill promotion (P3-001)
     if (bootstrapMgr) {
       api.on("heartbeat", async () => {
