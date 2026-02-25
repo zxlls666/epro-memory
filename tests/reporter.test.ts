@@ -10,6 +10,14 @@ import {
   DEFAULT_REPORTER_CONFIG,
 } from "../reporter.js";
 
+vi.mock("fs/promises", () => ({
+  mkdir: vi.fn().mockResolvedValue(undefined),
+  writeFile: vi.fn().mockResolvedValue(undefined),
+  readFile: vi.fn().mockRejectedValue(new Error("ENOENT")),
+  appendFile: vi.fn().mockResolvedValue(undefined),
+  access: vi.fn().mockRejectedValue(new Error("ENOENT")),
+}));
+
 const mockLogger = {
   debug: vi.fn(),
   info: vi.fn(),
@@ -159,6 +167,42 @@ describe("MemoryReporter", () => {
 
       // Should not log anything when disabled
       expect(mockLogger.debug).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("saveDailyReport", () => {
+    it("should return null when dailySummary is disabled", async () => {
+      const disabledConfig: ReporterConfig = {
+        ...DEFAULT_REPORTER_CONFIG,
+        enabled: true,
+        logPath: "/tmp/test-reports",
+        dailySummary: false,
+      };
+      const r = new MemoryReporter(disabledConfig, mockLogger);
+      const result = await r.saveDailyReport("2025-01-15");
+      expect(result).toBeNull();
+    });
+
+    it("should write file and return path when file does not exist", async () => {
+      const { access, writeFile } = await import("fs/promises");
+      vi.mocked(access).mockRejectedValueOnce(new Error("ENOENT"));
+      vi.mocked(writeFile).mockResolvedValueOnce(undefined);
+
+      const result = await reporter.saveDailyReport("2025-01-15");
+      expect(result).toContain("daily-2025-01-15.md");
+      expect(writeFile).toHaveBeenCalled();
+    });
+
+    it("should skip and return null when file already exists", async () => {
+      const { access, writeFile } = await import("fs/promises");
+      vi.mocked(access).mockResolvedValueOnce(undefined);
+
+      const result = await reporter.saveDailyReport("2025-01-15");
+      expect(result).toBeNull();
+      const callsAfterAccess = vi.mocked(writeFile).mock.calls.filter(
+        (c) => String(c[0]).includes("daily-2025-01-15"),
+      );
+      expect(callsAfterAccess).toHaveLength(0);
     });
   });
 });
