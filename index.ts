@@ -28,7 +28,9 @@ import {
   type CheckpointConfig,
   type ExtractionCheckpoint,
 } from "./checkpoint.js";
-import type { PluginLogger } from "./types.js";
+import { MemoryReporter, type ReporterConfig } from "./reporter.js";
+import { BootstrapManager, type BootstrapConfig } from "./bootstrap.js";
+import type { ExtractionStats, PluginLogger } from "./types.js";
 
 type MoltbotPluginApi = {
   pluginConfig?: Record<string, unknown>;
@@ -95,6 +97,35 @@ const eproMemoryPlugin = {
       cfg.checkpoint?.autoRecoverOnStart ??
       DEFAULTS.checkpoint.autoRecoverOnStart;
 
+    // Reporter config (P2-001: Memory change reporting)
+    const reportingEnabled =
+      cfg.reporting?.enabled ?? DEFAULTS.reporting.enabled;
+    const reporterConfig: ReporterConfig = {
+      enabled: reportingEnabled,
+      logPath: api.resolvePath(
+        cfg.reporting?.logPath ?? DEFAULTS.reporting.logPath,
+      ),
+      dailySummary:
+        cfg.reporting?.dailySummary ?? DEFAULTS.reporting.dailySummary,
+      notifyOnPivotal:
+        cfg.reporting?.notifyOnPivotal ?? DEFAULTS.reporting.notifyOnPivotal,
+    };
+
+    // Bootstrap config (P3-001: Pattern-to-Skill promotion)
+    const bootstrapEnabled =
+      cfg.bootstrap?.enabled ?? DEFAULTS.bootstrap.enabled;
+    const bootstrapConfig: BootstrapConfig = {
+      enabled: bootstrapEnabled,
+      patternPromotionThreshold:
+        cfg.bootstrap?.patternPromotionThreshold ??
+        DEFAULTS.bootstrap.patternPromotionThreshold,
+      skillDraftPath: api.resolvePath(
+        cfg.bootstrap?.skillDraftPath ?? DEFAULTS.bootstrap.skillDraftPath,
+      ),
+      minConfidence:
+        cfg.bootstrap?.minConfidence ?? DEFAULTS.bootstrap.minConfidence,
+    };
+
     // Initialize services
     const vectorDim = cfg.embedding.dimensions ?? vectorDimsForModel(embeddingModel);
     const db = new MemoryDB(dbPath, vectorDim, logger, cfg.decay);
@@ -117,6 +148,18 @@ const eproMemoryPlugin = {
     // Initialize checkpoint manager (P2-002)
     const checkpointMgr = checkpointEnabled
       ? new CheckpointManager(checkpointPath, logger)
+      : null;
+
+    // Initialize reporter (P2-001)
+    const reporter = reportingEnabled
+      ? new MemoryReporter(reporterConfig, logger)
+      : null;
+
+    // Initialize bootstrap (P3-001)
+    const bootstrapMgr = bootstrapEnabled
+      ? new BootstrapManager(bootstrapConfig, logger, {
+          analyze: (prompt) => llm.complete(prompt),
+        })
       : null;
 
     // Register service lifecycle
@@ -225,19 +268,28 @@ const eproMemoryPlugin = {
             const user = ctx?.agentId ?? "agent";
 
             // Use checkpoint-based extraction if enabled (P2-002)
+            let stats: ExtractionStats;
             if (checkpointMgr) {
-              await extractor.extractWithCheckpoint(
+              stats = await extractor.extractWithCheckpoint(
                 conversationText,
                 sessionKey,
                 user,
                 checkpointMgr,
               );
             } else {
-              await extractor.extractAndPersist(
+              stats = await extractor.extractAndPersist(
                 conversationText,
                 sessionKey,
                 user,
               );
+            }
+
+            // Report extraction results (P2-001)
+            if (reporter && (stats.created > 0 || stats.merged > 0)) {
+              const report = reporter.createReport(sessionKey, stats, [], user);
+              reporter.record(report).catch((err) => {
+                logger.warn(`epro-memory: reporter failed: ${String(err)}`);
+              });
             }
           } catch (err) {
             logger.warn(`epro-memory: extraction failed: ${String(err)}`);
@@ -276,6 +328,25 @@ const eproMemoryPlugin = {
           );
         } catch (err) {
           logger.warn(`epro-memory: QMD projection failed: ${String(err)}`);
+        }
+      });
+    }
+
+    // Hook: heartbeat — bootstrap pattern-to-skill promotion (P3-001)
+    if (bootstrapMgr) {
+      api.on("heartbeat", async () => {
+        try {
+          const patterns = await db.findByCategory("patterns");
+          for (const pattern of patterns) {
+            if (!bootstrapMgr.shouldConsider(pattern)) continue;
+
+            const candidate = await bootstrapMgr.checkPatternPromotion(pattern);
+            if (candidate) {
+              await bootstrapMgr.saveDraft(candidate);
+            }
+          }
+        } catch (err) {
+          logger.warn(`epro-memory: bootstrap failed: ${String(err)}`);
         }
       });
     }

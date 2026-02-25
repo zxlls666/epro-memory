@@ -202,11 +202,13 @@ export class MemoryDB {
     limit: number = 5,
     minScore: number = 0.3,
     categoryFilter?: MemoryCategory,
+    skipDecay?: boolean,
   ): Promise<MemorySearchResult[]> {
     await this.ensureInit();
 
-    // When decay is enabled, fetch more candidates to ensure enough results after scoring
-    const fetchLimit = this.decayConfig.enabled ? Math.max(limit * 3, 20) : limit;
+    // When decay is active, over-fetch to compensate for re-ranking
+    const useDecay = !skipDecay && this.decayConfig.enabled;
+    const fetchLimit = useDecay ? Math.max(limit * 3, 20) : limit;
 
     let query = this.table!.vectorSearch(vector).limit(fetchLimit);
 
@@ -223,13 +225,9 @@ export class MemoryDB {
         const vectorScore = 1 / (1 + distance);
         const entry = rowToEntry(row as Record<string, unknown>);
 
-        // Apply decay scoring
-        const score = computeDecayScore(
-          vectorScore,
-          entry.created_at,
-          entry.active_count,
-          this.decayConfig,
-        );
+        const score = useDecay
+          ? computeDecayScore(vectorScore, entry.created_at, entry.active_count, this.decayConfig)
+          : vectorScore;
 
         return { entry, score };
       })
