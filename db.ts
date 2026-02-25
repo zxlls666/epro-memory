@@ -206,6 +206,12 @@ export class MemoryDB {
   ): Promise<MemorySearchResult[]> {
     await this.ensureInit();
 
+    if (vector.length !== this.vectorDim) {
+      throw new Error(
+        `epro-memory: search vector dimension mismatch — got ${vector.length}-dim but DB expects ${this.vectorDim}`,
+      );
+    }
+
     // When decay is active, over-fetch to compensate for re-ranking
     const useDecay = !skipDecay && this.decayConfig.enabled;
     const fetchLimit = useDecay ? Math.max(limit * 3, 20) : limit;
