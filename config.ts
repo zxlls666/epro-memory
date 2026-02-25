@@ -29,6 +29,7 @@ const QmdProjectionConfig = Type.Object({
   includeL1: Type.Optional(Type.Boolean()),
   categorySeparateFiles: Type.Optional(Type.Boolean()),
   dailyTrigger: Type.Optional(Type.Boolean()),
+  intervalMs: Type.Optional(Type.Number()),
 });
 
 const CheckpointConfig = Type.Object({
@@ -96,6 +97,7 @@ export const DEFAULTS = {
     includeL1: true,
     categorySeparateFiles: true,
     dailyTrigger: true,
+    intervalMs: 24 * 60 * 60 * 1000, // 24 hours
   },
   checkpoint: {
     enabled: false,

@@ -18,6 +18,8 @@ export interface ProjectionConfig {
   includeL1: boolean;
   categorySeparateFiles: boolean;
   dailyTrigger: boolean;
+  /** Minimum interval between projections in milliseconds. Default: 86400000 (24h) */
+  intervalMs: number;
 }
 
 export const DEFAULT_PROJECTION_CONFIG: ProjectionConfig = {
@@ -26,6 +28,7 @@ export const DEFAULT_PROJECTION_CONFIG: ProjectionConfig = {
   includeL1: true,
   categorySeparateFiles: true,
   dailyTrigger: true,
+  intervalMs: 24 * 60 * 60 * 1000, // 24 hours
 };
 
 const CATEGORY_TITLES: Record<MemoryCategory, string> = {
@@ -266,13 +269,17 @@ export async function projectToQMD(
 }
 
 /**
- * Check if projection should run based on daily trigger logic.
- * Returns true if more than 24 hours have passed since last projection.
+ * Check if projection should run based on configured interval.
+ * Returns true if enough time has passed since last projection.
+ *
+ * @param lastProjection - Timestamp of the last projection
+ * @param intervalMs - Minimum interval between projections in milliseconds
+ * @param now - Current timestamp (for testing)
  */
 export function shouldRunProjection(
   lastProjection: number,
+  intervalMs: number,
   now: number = Date.now(),
 ): boolean {
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  return now - lastProjection >= oneDayMs;
+  return now - lastProjection >= intervalMs;
 }

@@ -215,29 +215,41 @@ describe("generateDailySummary", () => {
 });
 
 describe("shouldRunProjection", () => {
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+
   it("should return true if no previous projection", () => {
-    const result = shouldRunProjection(0, Date.now());
+    const result = shouldRunProjection(0, ONE_DAY, Date.now());
     expect(result).toBe(true);
   });
 
-  it("should return true if more than 24 hours since last projection", () => {
+  it("should return true if more than interval since last projection", () => {
     const now = Date.now();
     const oneDayAgo = now - 25 * 60 * 60 * 1000; // 25 hours ago
-    const result = shouldRunProjection(oneDayAgo, now);
+    const result = shouldRunProjection(oneDayAgo, ONE_DAY, now);
     expect(result).toBe(true);
   });
 
-  it("should return false if less than 24 hours since last projection", () => {
+  it("should return false if less than interval since last projection", () => {
     const now = Date.now();
     const twelveHoursAgo = now - 12 * 60 * 60 * 1000;
-    const result = shouldRunProjection(twelveHoursAgo, now);
+    const result = shouldRunProjection(twelveHoursAgo, ONE_DAY, now);
     expect(result).toBe(false);
   });
 
-  it("should return true at exactly 24 hours", () => {
+  it("should return true at exactly the interval boundary", () => {
     const now = Date.now();
-    const exactlyOneDayAgo = now - 24 * 60 * 60 * 1000;
-    const result = shouldRunProjection(exactlyOneDayAgo, now);
+    const exactlyOneDayAgo = now - ONE_DAY;
+    const result = shouldRunProjection(exactlyOneDayAgo, ONE_DAY, now);
     expect(result).toBe(true);
+  });
+
+  it("should respect custom interval (e.g. 1 hour)", () => {
+    const now = Date.now();
+    const oneHour = 60 * 60 * 1000;
+    const twoHoursAgo = now - 2 * oneHour;
+    expect(shouldRunProjection(twoHoursAgo, oneHour, now)).toBe(true);
+
+    const thirtyMinAgo = now - 30 * 60 * 1000;
+    expect(shouldRunProjection(thirtyMinAgo, oneHour, now)).toBe(false);
   });
 });

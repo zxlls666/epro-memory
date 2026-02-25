@@ -81,6 +81,8 @@ const eproMemoryPlugin = {
         DEFAULTS.qmdProjection.categorySeparateFiles,
       dailyTrigger:
         cfg.qmdProjection?.dailyTrigger ?? DEFAULTS.qmdProjection.dailyTrigger,
+      intervalMs:
+        cfg.qmdProjection?.intervalMs ?? DEFAULTS.qmdProjection.intervalMs,
     };
 
     // Checkpoint config (P2-002: Resumable extraction)
@@ -252,7 +254,7 @@ const eproMemoryPlugin = {
           );
           const now = Date.now();
 
-          if (!shouldRunProjection(lastProjection, now)) {
+          if (!shouldRunProjection(lastProjection, qmdProjectionConfig.intervalMs, now)) {
             return;
           }
 
