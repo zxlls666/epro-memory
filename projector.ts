@@ -32,7 +32,7 @@ export const DEFAULT_PROJECTION_CONFIG: ProjectionConfig = {
 };
 
 const CATEGORY_TITLES: Record<MemoryCategory, string> = {
-  profile: "Profile (��户身份)",
+  profile: "Profile (用户身份)",
   preferences: "Preferences (用户偏好)",
   entities: "Entities (实体)",
   events: "Events (事件)",

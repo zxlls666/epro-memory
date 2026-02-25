@@ -244,7 +244,7 @@ export class MemoryReporter {
     // Get unique users
     const users = [...new Set(reports.map((r) => r.user))];
 
-    return `## epro-memory 每日报�� - ${targetDate}
+    return `## epro-memory 每日报告 - ${targetDate}
 
 ### 统计
 
