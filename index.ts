@@ -102,6 +102,7 @@ const eproMemoryPlugin = {
       cfg.embedding.apiKey,
       embeddingModel,
       cfg.embedding.baseUrl,
+      cfg.embedding.dimensions,
     );
     const llm = new LlmClient(cfg.llm.apiKey, llmModel, cfg.llm.baseUrl);
     const deduplicator = new MemoryDeduplicator(db, llm, logger);

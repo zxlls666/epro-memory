@@ -135,6 +135,19 @@ export class MemoryDB {
 
     if (tables.includes(TABLE_NAME)) {
       this.table = await this.db.openTable(TABLE_NAME);
+
+      // Verify existing table's vector dimensions match configured dimensions
+      const sample = await this.table.query().limit(1).toArray();
+      if (sample.length > 0) {
+        const existingDim = (sample[0].vector as number[]).length;
+        if (existingDim !== this.vectorDim) {
+          throw new Error(
+            `epro-memory: vector dimension mismatch — DB has ${existingDim}-dim vectors ` +
+              `but config expects ${this.vectorDim}. ` +
+              `Change embedding.dimensions or delete the DB to recreate.`,
+          );
+        }
+      }
     } else {
       // Create table with schema row then delete it
       this.table = await this.db.createTable(TABLE_NAME, [
@@ -163,6 +176,15 @@ export class MemoryDB {
     >,
   ): Promise<AgentMemoryRow> {
     await this.ensureInit();
+
+    // Validate vector dimensions before storing
+    if (entry.vector.length !== this.vectorDim) {
+      throw new Error(
+        `epro-memory: vector dimension mismatch — got ${entry.vector.length}-dim vector ` +
+          `but DB expects ${this.vectorDim}`,
+      );
+    }
+
     const now = Date.now();
     const row: AgentMemoryRow = {
       ...entry,
