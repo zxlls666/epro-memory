@@ -194,6 +194,16 @@ const eproMemoryPlugin = {
             logger.warn(`epro-memory: auto-recovery failed: ${String(err)}`);
           }
         }
+
+        // Load pending notifications on startup (P2-001)
+        if (reporter) {
+          await reporter.loadPendingNotifications();
+        }
+
+        // Load candidates index on startup (P3-001)
+        if (bootstrapMgr) {
+          await bootstrapMgr.loadCandidatesIndex();
+        }
       },
     });
 
